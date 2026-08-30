@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.57",
+    "@napi-rs/canvas": "^1.0.8",
     "@types/pdf-parse": "^1.1.5",
     "ai": "^7.0.84",
     "clsx": "^2.1.1",
