@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import pdfParse from 'pdf-parse';
+import { extractText, getDocumentProxy } from 'unpdf';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +15,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (file.type !== 'application/pdf') {
+    if (
+      file.type !== 'application/pdf' &&
+      !file.name.toLowerCase().endsWith('.pdf')
+    ) {
       return NextResponse.json(
         { error: 'Please upload a PDF file.' },
         { status: 400 }
@@ -23,16 +26,29 @@ export async function POST(request: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const data = new Uint8Array(arrayBuffer);
 
-    const result = await pdfParse(buffer);
-    const text = result.text || '';
+    // PDF.js is intentionally configured to continue past
+    // recoverable PDF errors such as malformed XRef entries.
+    const pdf = await getDocumentProxy(data, {
+      stopAtErrors: false,
+      isEvalSupported: false,
+    });
+
+    const result = await extractText(pdf, {
+      mergePages: true,
+    });
+
+    const text =
+      typeof result.text === 'string'
+        ? result.text
+        : String(result.text ?? '');
 
     if (!text.trim()) {
       return NextResponse.json(
         {
           error:
-            'Could not extract text from PDF. The document might be scanned or image-only.',
+            'Could not extract text from this PDF. The document may be scanned, image-only, encrypted, or corrupted.',
         },
         { status: 422 }
       );
@@ -42,15 +58,17 @@ export async function POST(request: Request) {
       text: text.trim(),
     });
   } catch (error: unknown) {
-    const errMessage =
+    const message =
       error instanceof Error
         ? error.message
         : 'Failed to parse PDF';
 
-    console.error('PDF parsing error:', error);
+    console.error('PDF extraction error:', error);
 
     return NextResponse.json(
-      { error: errMessage },
+      {
+        error: `PDF extraction failed: ${message}`,
+      },
       { status: 500 }
     );
   }
