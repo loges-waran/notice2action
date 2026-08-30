@@ -28,12 +28,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const data = new Uint8Array(arrayBuffer);
 
-    // PDF.js is intentionally configured to continue past
-    // recoverable PDF errors such as malformed XRef entries.
-    const pdf = await getDocumentProxy(data, {
-      stopAtErrors: false,
-      isEvalSupported: false,
-    });
+    const pdf = await getDocumentProxy(data);
 
     const result = await extractText(pdf, {
       mergePages: true,
@@ -48,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Could not extract text from this PDF. The document may be scanned, image-only, encrypted, or corrupted.',
+            'Could not extract text from this PDF. The document may be scanned or image-only.',
         },
         { status: 422 }
       );
@@ -58,7 +53,7 @@ export async function POST(request: Request) {
       text: text.trim(),
     });
   } catch (error: unknown) {
-    const message =
+    const errMessage =
       error instanceof Error
         ? error.message
         : 'Failed to parse PDF';
@@ -66,9 +61,7 @@ export async function POST(request: Request) {
     console.error('PDF extraction error:', error);
 
     return NextResponse.json(
-      {
-        error: `PDF extraction failed: ${message}`,
-      },
+      { error: errMessage },
       { status: 500 }
     );
   }
